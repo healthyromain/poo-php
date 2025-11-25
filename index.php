@@ -64,9 +64,20 @@ abstract class AbstractPlayer
         return 1 / (1 + (10 ** (($player->getRatio() - $this->getRatio()) / 400)));
     }
 
+    /**
+     * Get the K-factor for Elo rating calculation.
+     * Override this method to change the speed of ratio evolution.
+     * 
+     * @return int The K-factor (default: 32)
+     */
+    protected function getKFactor(): int
+    {
+        return 32;
+    }
+
     public function updateRatioAgainst(AbstractPlayer $player, int $result)
     {
-        $this->ratio += 32 * ($result - $this->probabilityAgainst($player));
+        $this->ratio += $this->getKFactor() * ($result - $this->probabilityAgainst($player));
     }
 
     public function getRatio(): float
@@ -77,13 +88,8 @@ abstract class AbstractPlayer
 
 final class Player extends AbstractPlayer
 {
-    // Concrete player with base behavior; inherits constructor
 }
 
-/**
- * Classe QueuingPlayer qui hérite de Player
- * et ajoute la propriété range (portée de recherche d’adversaire)
- */
 final class QueuingPlayer extends AbstractPlayer
 {
     /** @var int */
@@ -91,7 +97,6 @@ final class QueuingPlayer extends AbstractPlayer
 
     public function __construct(string $name, float $ratio = 400.0, int $range = 1)
     {
-        // On appelle le constructeur du parent pour initialiser name et ratio
         parent::__construct($name, $ratio);
         $this->range = $range;
     }
@@ -102,6 +107,24 @@ final class QueuingPlayer extends AbstractPlayer
     }
 }
 
+final class BlitzPlayer extends AbstractPlayer
+{
+    public function __construct(string $name, float $ratio = 1200.0)
+    {
+        parent::__construct($name, $ratio);
+    }
+
+    /**
+     * Override K-factor for 4x faster ratio evolution
+     * 
+     * @return int K-factor of 128 (4 * 32)
+     */
+    protected function getKFactor(): int
+    {
+        return 128;
+    }
+}
+
 // --- Test ---
 $greg = new Player('greg', 400);
 $jade = new Player('jade', 476);
@@ -109,7 +132,19 @@ $jade = new Player('jade', 476);
 $lobby = new Lobby();
 $lobby->addPlayers($greg, $jade);
 
-// Résultat attendu : un QueuingPlayer avec range=1, name=jade, ratio=476
 var_dump($lobby->findOponents($lobby->queuingPlayers[0]));
+
+echo "\n--- BlitzPlayer Test ---\n";
+$blitzAlice = new BlitzPlayer('Alice');
+$blitzBob = new BlitzPlayer('Bob', 1250);
+
+echo "Alice initial ratio: " . $blitzAlice->getRatio() . "\n";
+echo "Bob initial ratio: " . $blitzBob->getRatio() . "\n";
+
+$blitzAlice->updateRatioAgainst($blitzBob, 1);
+$blitzBob->updateRatioAgainst($blitzAlice, 0);
+
+echo "Alice ratio after win: " . $blitzAlice->getRatio() . "\n";
+echo "Bob ratio after loss: " . $blitzBob->getRatio() . "\n";
 
 exit(0);
