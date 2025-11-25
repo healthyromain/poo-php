@@ -11,7 +11,7 @@
 
 declare(strict_types=1);
 
-class Lobby
+final class Lobby
 {
     /** @var array<QueuingPlayer> */
     public $queuingPlayers = [];
@@ -28,13 +28,12 @@ class Lobby
         });
     }
 
-    public function addPlayer(Player $player)
+    public function addPlayer(AbstractPlayer $player)
     {
-        // Lorsqu’un joueur est ajouté, on crée un QueuingPlayer
         $this->queuingPlayers[] = new QueuingPlayer($player->getName(), $player->getRatio());
     }
 
-    public function addPlayers(Player ...$players)
+    public function addPlayers(AbstractPlayer ...$players)
     {
         foreach ($players as $player) {
             $this->addPlayer($player);
@@ -42,7 +41,7 @@ class Lobby
     }
 }
 
-class Player
+abstract class AbstractPlayer
 {
     /** @var string */
     protected $name;
@@ -60,12 +59,12 @@ class Player
         return $this->name;
     }
 
-    private function probabilityAgainst(self $player): float
+    private function probabilityAgainst(AbstractPlayer $player): float
     {
         return 1 / (1 + (10 ** (($player->getRatio() - $this->getRatio()) / 400)));
     }
 
-    public function updateRatioAgainst(self $player, int $result)
+    public function updateRatioAgainst(AbstractPlayer $player, int $result)
     {
         $this->ratio += 32 * ($result - $this->probabilityAgainst($player));
     }
@@ -76,11 +75,16 @@ class Player
     }
 }
 
+final class Player extends AbstractPlayer
+{
+    // Concrete player with base behavior; inherits constructor
+}
+
 /**
  * Classe QueuingPlayer qui hérite de Player
  * et ajoute la propriété range (portée de recherche d’adversaire)
  */
-class QueuingPlayer extends Player
+final class QueuingPlayer extends AbstractPlayer
 {
     /** @var int */
     protected $range;
