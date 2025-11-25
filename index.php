@@ -14,7 +14,7 @@ declare(strict_types=1);
 class Lobby
 {
     /** @var array<QueuingPlayer> */
-    public array $queuingPlayers = [];
+    public $queuingPlayers = [];
 
     public function findOponents(QueuingPlayer $player): array
     {
@@ -28,13 +28,13 @@ class Lobby
         });
     }
 
-    public function addPlayer(Player $player): void
+    public function addPlayer(Player $player)
     {
         // Lorsqu’un joueur est ajouté, on crée un QueuingPlayer
         $this->queuingPlayers[] = new QueuingPlayer($player->getName(), $player->getRatio());
     }
 
-    public function addPlayers(Player ...$players): void
+    public function addPlayers(Player ...$players)
     {
         foreach ($players as $player) {
             $this->addPlayer($player);
@@ -44,8 +44,10 @@ class Lobby
 
 class Player
 {
-    protected string $name;
-    protected float $ratio;
+    /** @var string */
+    protected $name;
+    /** @var float */
+    protected $ratio;
 
     public function __construct(string $name, float $ratio = 400.0)
     {
@@ -63,7 +65,7 @@ class Player
         return 1 / (1 + (10 ** (($player->getRatio() - $this->getRatio()) / 400)));
     }
 
-    public function updateRatioAgainst(self $player, int $result): void
+    public function updateRatioAgainst(self $player, int $result)
     {
         $this->ratio += 32 * ($result - $this->probabilityAgainst($player));
     }
@@ -80,7 +82,8 @@ class Player
  */
 class QueuingPlayer extends Player
 {
-    protected int $range;
+    /** @var int */
+    protected $range;
 
     public function __construct(string $name, float $ratio = 400.0, int $range = 1)
     {
