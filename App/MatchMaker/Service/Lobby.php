@@ -4,32 +4,34 @@ declare(strict_types=1);
 
 namespace App\MatchMaker\Service;
 
-use App\MatchMaker\Entity\AbstractPlayer;
-use App\MatchMaker\Entity\QueuingPlayer;
+use App\MatchMaker\Entity\PlayerInterface;
+use App\MatchMaker\Entity\QueuingPlayerInterface;
 
-class Lobby
+use App\MatchMaker\Service\LobbyInterface;
+
+class Lobby implements LobbyInterface
 {
-    /** @var QueuingPlayer[] */
+    /** @var QueuingPlayerInterface[] */
     public $queuingPlayers = [];
 
-    public function findOponents(QueuingPlayer $player): array
+    public function findOponents(QueuingPlayerInterface $player): array
     {
         $minLevel = round($player->getRatio() / 100);
         $maxLevel = $minLevel + $player->getRange();
 
-        return array_filter($this->queuingPlayers, static function (QueuingPlayer $potentialOponent) use ($minLevel, $maxLevel, $player) {
+        return array_filter($this->queuingPlayers, static function (QueuingPlayerInterface $potentialOponent) use ($minLevel, $maxLevel, $player) {
             $playerLevel = round($potentialOponent->getRatio() / 100);
 
             return $player !== $potentialOponent && ($minLevel <= $playerLevel) && ($playerLevel <= $maxLevel);
         });
     }
 
-    public function addPlayer(AbstractPlayer $player)
+    public function addPlayer(PlayerInterface $player)
     {
-        $this->queuingPlayers[] = new QueuingPlayer($player);
+        $this->queuingPlayers[] = new \App\MatchMaker\Entity\QueuingPlayer($player);
     }
 
-    public function addPlayers(AbstractPlayer ...$players)
+    public function addPlayers(PlayerInterface ...$players)
     {
         foreach ($players as $player) {
             $this->addPlayer($player);

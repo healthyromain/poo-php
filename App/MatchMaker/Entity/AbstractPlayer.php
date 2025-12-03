@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\MatchMaker\Entity;
 
-abstract class AbstractPlayer
+use App\MatchMaker\Entity\PlayerInterface;
+
+abstract class AbstractPlayer implements PlayerInterface
 {
     /** @var string */
     protected $name;
@@ -27,7 +29,7 @@ abstract class AbstractPlayer
         return $this->ratio;
     }
 
-    protected function probabilityAgainst(AbstractPlayer $player): float
+    protected function probabilityAgainst(PlayerInterface $player): float
     {
         return 1 / (1 + (10 ** (($player->getRatio() - $this->getRatio()) / 400)));
     }
@@ -42,7 +44,7 @@ abstract class AbstractPlayer
         return 32;
     }
 
-    public function updateRatioAgainst(AbstractPlayer $player, int $result)
+    public function updateRatioAgainst(PlayerInterface $player, int $result)
     {
         $this->ratio += $this->kFactor() * ($result - $this->probabilityAgainst($player));
     }
