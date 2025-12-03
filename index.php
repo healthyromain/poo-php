@@ -11,140 +11,164 @@
 
 declare(strict_types=1);
 
-final class Lobby
-{
-    /** @var array<QueuingPlayer> */
-    public $queuingPlayers = [];
+namespace App\MatchMaker\Service {
 
-    public function findOponents(QueuingPlayer $player): array
+    use App\MatchMaker\Entity\AbstractPlayer;
+    use App\MatchMaker\Entity\QueuingPlayer;
+
+    class Lobby
     {
-        $minLevel = round($player->getRatio() / 100);
-        $maxLevel = $minLevel + $player->getRange();
+        /** @var \App\MatchMaker\Entity\QueuingPlayer[] */
+        public $queuingPlayers = [];
 
-        return array_filter($this->queuingPlayers, static function (QueuingPlayer $potentialOponent) use ($minLevel, $maxLevel, $player) {
-            $playerLevel = round($potentialOponent->getRatio() / 100);
+        public function findOponents(QueuingPlayer $player): array
+        {
+            $minLevel = round($player->getRatio() / 100);
+            $maxLevel = $minLevel + $player->getRange();
 
-            return $player !== $potentialOponent && ($minLevel <= $playerLevel) && ($playerLevel <= $maxLevel);
-        });
-    }
+            return array_filter($this->queuingPlayers, static function (QueuingPlayer $potentialOponent) use ($minLevel, $maxLevel, $player) {
+                $playerLevel = round($potentialOponent->getRatio() / 100);
 
-    public function addPlayer(AbstractPlayer $player)
-    {
-        $this->queuingPlayers[] = new QueuingPlayer($player->getName(), $player->getRatio());
-    }
+                return $player !== $potentialOponent && ($minLevel <= $playerLevel) && ($playerLevel <= $maxLevel);
+            });
+        }
 
-    public function addPlayers(AbstractPlayer ...$players)
-    {
-        foreach ($players as $player) {
-            $this->addPlayer($player);
+        public function addPlayer(AbstractPlayer $player)
+        {
+            $this->queuingPlayers[] = new QueuingPlayer($player);
+        }
+
+        public function addPlayers(AbstractPlayer ...$players)
+        {
+            foreach ($players as $player) {
+                $this->addPlayer($player);
+            }
         }
     }
+
 }
 
-abstract class AbstractPlayer
-{
-    /** @var string */
-    protected $name;
-    /** @var float */
-    protected $ratio;
+namespace App\MatchMaker\Entity {
 
-    public function __construct(string $name, float $ratio = 400.0)
+    abstract class AbstractPlayer
     {
-        $this->name = $name;
-        $this->ratio = $ratio;
+        /** @var string */
+        protected $name;
+        /** @var float */
+        protected $ratio;
+
+        public function __construct(string $name = 'anonymous', float $ratio = 400.0)
+        {
+            $this->name = $name;
+            $this->ratio = $ratio;
+        }
+
+        abstract public function getName(): string;
+
+        abstract public function getRatio(): float;
+
+        abstract protected function probabilityAgainst(AbstractPlayer $player): float;
+
+        abstract public function updateRatioAgainst(AbstractPlayer $player, int $result);
+
+        /**
+         * K-factor used to scale rating changes. Can be overridden by subclasses.
+         *
+         * @return int
+         */
+        protected function kFactor()
+        {
+            return 32;
+        }
     }
 
-    public function getName(): string
+    class Player extends AbstractPlayer
     {
-        return $this->name;
+        public function getName(): string
+        {
+            return $this->name;
+        }
+
+        protected function probabilityAgainst(AbstractPlayer $player): float
+        {
+            return 1 / (1 + (10 ** (($player->getRatio() - $this->getRatio()) / 400)));
+        }
+
+        public function updateRatioAgainst(AbstractPlayer $player, int $result)
+        {
+            $this->ratio += $this->kFactor() * ($result - $this->probabilityAgainst($player));
+        }
+
+        public function getRatio(): float
+        {
+            return $this->ratio;
+        }
     }
 
-    private function probabilityAgainst(AbstractPlayer $player): float
+    class QueuingPlayer extends Player
     {
-        return 1 / (1 + (10 ** (($player->getRatio() - $this->getRatio()) / 400)));
+        /** @var int */
+        protected $range;
+
+        public function __construct(AbstractPlayer $player, $range = 1)
+        {
+            parent::__construct($player->getName(), $player->getRatio());
+            $this->range = $range;
+        }
+
+        public function getRange(): int
+        {
+            return $this->range;
+        }
+
+        public function upgradeRange()
+        {
+            $this->range = min($this->range + 1, 40);
+        }
     }
 
-    /**
-     * Get the K-factor for Elo rating calculation.
-     * Override this method to change the speed of ratio evolution.
-     * 
-     * @return int The K-factor (default: 32)
-     */
-    protected function getKFactor(): int
+    class BlitzPlayer extends Player
     {
-        return 32;
+        public function __construct($name = 'anonymous', $ratio = 1200.0)
+        {
+            parent::__construct($name, $ratio);
+        }
+
+        public function kFactor()
+        {
+            return 128;
+        }
+
+        public function updateRatioAgainst(AbstractPlayer $player, int $result)
+        {
+            $this->ratio += $this->kFactor() * ($result - $this->probabilityAgainst($player));
+        }
     }
 
-    public function updateRatioAgainst(AbstractPlayer $player, int $result)
-    {
-        $this->ratio += $this->getKFactor() * ($result - $this->probabilityAgainst($player));
-    }
-
-    public function getRatio(): float
-    {
-        return $this->ratio;
-    }
 }
 
-final class Player extends AbstractPlayer
-{
+namespace {
+    // --- Test ---
+    $greg = new \App\MatchMaker\Entity\Player('greg', 400);
+    $jade = new \App\MatchMaker\Entity\Player('jade', 476);
+
+    $lobby = new \App\MatchMaker\Service\Lobby();
+    $lobby->addPlayers($greg, $jade);
+
+    var_dump($lobby->findOponents($lobby->queuingPlayers[0]));
+
+    echo "\n--- BlitzPlayer Test ---\n";
+    $blitzAlice = new \App\MatchMaker\Entity\BlitzPlayer('Alice');
+    $blitzBob = new \App\MatchMaker\Entity\BlitzPlayer('Bob', 1250);
+
+    echo "Alice initial ratio: " . $blitzAlice->getRatio() . "\n";
+    echo "Bob initial ratio: " . $blitzBob->getRatio() . "\n";
+
+    $blitzAlice->updateRatioAgainst($blitzBob, 1);
+    $blitzBob->updateRatioAgainst($blitzAlice, 0);
+
+    echo "Alice ratio after win: " . $blitzAlice->getRatio() . "\n";
+    echo "Bob ratio after loss: " . $blitzBob->getRatio() . "\n";
+
+    exit(0);
 }
-
-final class QueuingPlayer extends AbstractPlayer
-{
-    /** @var int */
-    protected $range;
-
-    public function __construct(string $name, float $ratio = 400.0, int $range = 1)
-    {
-        parent::__construct($name, $ratio);
-        $this->range = $range;
-    }
-
-    public function getRange(): int
-    {
-        return $this->range;
-    }
-}
-
-final class BlitzPlayer extends AbstractPlayer
-{
-    public function __construct(string $name, float $ratio = 1200.0)
-    {
-        parent::__construct($name, $ratio);
-    }
-
-    /**
-     * Override K-factor for 4x faster ratio evolution
-     * 
-     * @return int K-factor of 128 (4 * 32)
-     */
-    protected function getKFactor(): int
-    {
-        return 128;
-    }
-}
-
-// --- Test ---
-$greg = new Player('greg', 400);
-$jade = new Player('jade', 476);
-
-$lobby = new Lobby();
-$lobby->addPlayers($greg, $jade);
-
-var_dump($lobby->findOponents($lobby->queuingPlayers[0]));
-
-echo "\n--- BlitzPlayer Test ---\n";
-$blitzAlice = new BlitzPlayer('Alice');
-$blitzBob = new BlitzPlayer('Bob', 1250);
-
-echo "Alice initial ratio: " . $blitzAlice->getRatio() . "\n";
-echo "Bob initial ratio: " . $blitzBob->getRatio() . "\n";
-
-$blitzAlice->updateRatioAgainst($blitzBob, 1);
-$blitzBob->updateRatioAgainst($blitzAlice, 0);
-
-echo "Alice ratio after win: " . $blitzAlice->getRatio() . "\n";
-echo "Bob ratio after loss: " . $blitzBob->getRatio() . "\n";
-
-exit(0);
